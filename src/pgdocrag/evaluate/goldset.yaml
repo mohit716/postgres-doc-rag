@@ -1,0 +1,170 @@
+# Retrieval gold set.
+#
+# Questions are phrased by intent rather than by parameter name, so a hit
+# requires the retriever to bridge wording ("how long before a query is
+# cancelled" -> statement_timeout) instead of matching a string.
+#
+# Expectations:
+#   expect_anchor  the chunk's section anchor, e.g. GUC-WORK-MEM. Configuration
+#                  parameters carry these in both formats: the HTML docs publish
+#                  them, and the PDF extractor reconstructs the same form.
+#   expect_path    a substring of the chunk breadcrumb, for content that has no
+#                  stable anchor (command reference sections).
+#
+# A result counts as relevant when every expectation listed for it matches.
+
+- question: Which IP addresses does the server accept connections on?
+  expect_anchor: GUC-LISTEN-ADDRESSES
+
+- question: How do I change the TCP port the database listens on?
+  expect_anchor: GUC-PORT
+
+- question: How many clients can connect to the server at the same time?
+  expect_anchor: GUC-MAX-CONNECTIONS
+
+- question: How much memory should I dedicate to caching data pages?
+  expect_anchor: GUC-SHARED-BUFFERS
+
+- question: How do I give each sort or hash operation more memory to work with?
+  expect_anchor: GUC-WORK-MEM
+
+- question: How do I speed up VACUUM and CREATE INDEX by giving them more memory?
+  expect_anchor: GUC-MAINTENANCE-WORK-MEM
+
+- question: How do I tell the planner how much memory the operating system caches?
+  expect_anchor: GUC-EFFECTIVE-CACHE-SIZE
+
+- question: How do I make the server write enough WAL to support replication?
+  expect_anchor: GUC-WAL-LEVEL
+
+- question: How do I control how large the write ahead log grows between checkpoints?
+  expect_anchor: GUC-MAX-WAL-SIZE
+
+- question: How often does the server run an automatic checkpoint?
+  expect_anchor: GUC-CHECKPOINT-TIMEOUT
+
+- question: How do I turn on archiving of transaction log files?
+  expect_anchor: GUC-ARCHIVE-MODE
+
+- question: What shell command is used to copy a completed WAL segment somewhere safe?
+  expect_anchor: GUC-ARCHIVE-COMMAND
+
+- question: Where does the server send its log output?
+  expect_anchor: GUC-LOG-DESTINATION
+
+- question: How do I log only queries that run longer than a certain time?
+  expect_anchor: GUC-LOG-MIN-DURATION-STATEMENT
+
+- question: How do I record every SQL statement executed against the database?
+  expect_anchor: GUC-LOG-STATEMENT
+
+- question: How do I add the user name and timestamp to each log line?
+  expect_anchor: GUC-LOG-LINE-PREFIX
+
+- question: How do I stop dead rows from being cleaned up automatically?
+  expect_anchor: GUC-AUTOVACUUM
+
+- question: What fraction of a table has to change before autovacuum processes it?
+  expect_anchor: GUC-AUTOVACUUM-VACUUM-SCALE-FACTOR
+
+- question: How do I abort any query that runs longer than a few seconds?
+  expect_anchor: GUC-STATEMENT-TIMEOUT
+
+- question: How do I stop a session from holding a lock forever while waiting?
+  expect_anchor: GUC-LOCK-TIMEOUT
+
+- question: How do I disconnect sessions that sit idle inside an open transaction?
+  expect_anchor: GUC-IDLE-IN-TRANSACTION-SESSION-TIMEOUT
+
+- question: How long does the server wait before checking for a deadlock?
+  expect_anchor: GUC-DEADLOCK-TIMEOUT
+
+- question: How do I tell the planner that random disk reads are cheap on SSDs?
+  expect_anchor: GUC-RANDOM-PAGE-COST
+
+- question: How do I make ANALYZE collect more detailed column statistics?
+  expect_anchor: GUC-DEFAULT-STATISTICS-TARGET
+
+- question: How do I enable encrypted connections to the server?
+  expect_anchor: GUC-SSL
+
+- question: Which algorithm is used when storing a user's password?
+  expect_anchor: GUC-PASSWORD-ENCRYPTION
+
+- question: How do I set the time zone the server displays timestamps in?
+  expect_anchor: GUC-TIMEZONE
+
+- question: How do I control which schemas are searched for unqualified table names?
+  expect_anchor: GUC-SEARCH-PATH
+
+- question: How do I load an extension library when the server starts?
+  expect_anchor: GUC-SHARED-PRELOAD-LIBRARIES
+
+- question: Can I turn off flushing writes to disk to make the server faster?
+  expect_anchor: GUC-FSYNC
+
+- question: How do I let transactions commit without waiting for WAL to reach disk?
+  expect_anchor: GUC-SYNCHRONOUS-COMMIT
+
+- question: How do I allow read only queries while a standby is replaying WAL?
+  expect_anchor: GUC-HOT-STANDBY
+
+- question: How many replication slots can the primary keep?
+  expect_anchor: GUC-MAX-REPLICATION-SLOTS
+
+- question: How much WAL should be retained for standby servers that fall behind?
+  expect_anchor: GUC-WAL-KEEP-SIZE
+
+- question: How much memory does each session use for temporary tables?
+  expect_anchor: GUC-TEMP-BUFFERS
+
+- question: How many background worker processes can the cluster run?
+  expect_anchor: GUC-MAX-WORKER-PROCESSES
+
+- question: How do I configure which hosts and users are allowed to authenticate?
+  expect_path: pg_hba.conf
+
+- question: How do I let anyone connect without providing a password?
+  expect_path: Trust Authentication
+
+- question: How do I map an operating system user to a different database user name?
+  expect_path: User Name Maps
+
+- question: How do I create a table that is split into partitions by date range?
+  expect_path: CREATE TABLE
+
+- question: How do I build an index without blocking writes to the table?
+  expect_path: CREATE INDEX
+
+- question: How do I reclaim disk space by rewriting a bloated table completely?
+  expect_path: VACUUM
+
+- question: How do I see the actual runtime of each step in a query plan?
+  expect_path: EXPLAIN
+
+- question: How do I bulk load rows into a table from a CSV file?
+  expect_path: COPY
+
+- question: How do I give another user permission to read a table?
+  expect_path: GRANT
+
+- question: How do I create a login account with a password?
+  expect_path: CREATE ROLE
+
+- question: How do I add a new column to an existing table?
+  expect_path: ALTER TABLE
+
+- question: How do I insert a row and update it instead if it already exists?
+  expect_path: INSERT
+
+- question: How do I lock the rows returned by a query against concurrent updates?
+  expect_path: SELECT
+
+- question: How do I dump a database in a format that can be restored selectively?
+  expect_path: pg_dump
+
+- question: How do I take a physical base backup of a running cluster?
+  expect_path: pg_basebackup
+
+- question: How do I show how long each query takes in the interactive terminal?
+  expect_path: psql

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Pipeline artifacts: reproducible from `pgdocrag` CLI, too large to track
+data/
+
+.env
+.idea/
+.vscode/

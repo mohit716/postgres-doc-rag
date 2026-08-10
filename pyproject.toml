@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pgdocrag"
+version = "0.1.0"
+description = "RAG ingestion pipeline for PostgreSQL documentation in HTML and PDF form"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.3",
+    "lxml>=5.0.0",
+    "pymupdf>=1.24.0",
+    "fastembed>=0.4.0",
+    "chromadb>=1.0.0",
+    "typer>=0.12.0",
+    "tqdm>=4.66.0",
+    "pyyaml>=6.0",
+    "numpy>=1.26.0",
+]
+
+[project.scripts]
+pgdocrag = "pgdocrag.cli:app"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
