@@ -1,0 +1,553 @@
+# Full-corpus retrieval gold set.
+#
+# Written for the whole manual, unlike goldset.yaml, which targets configuration
+# parameters almost exclusively. Both are kept: this one measures breadth, that
+# one is a focused stress test on a single dense topic.
+#
+# Expectations:
+#   expect_anchor / expect_anchors  section anchor(s), e.g. INDEXES-PARTIAL
+#   expect_path   / expect_paths    substring(s) of the chunk breadcrumb
+#
+# A result is relevant when it matches ANY listed expectation. Two reasons for
+# the plural forms. First, a section split across several chunks has several
+# equally correct answers, and scoring the second one as a miss understates
+# retrieval. Second, HTML anchors do not exist in the PDF, whose breadcrumbs are
+# leaf-scoped; a section-title path matches both formats, so the same set can
+# score either one. Titles are only used where they resolve to at most ~30 chunks
+# in both formats — a looser label would stop being evidence.
+#
+# Pages that publish only content-addressed anchors (#id-1.9.3.35.5) are labelled
+# by breadcrumb alone, since those ids are not stable across releases.
+#
+# Questions are phrased as a user would ask them, deliberately avoiding the
+# target's own vocabulary. Verify with:
+#   python scripts/build_goldset.py verify --goldset full
+
+# --- SQL commands ------------------------------------------------------------
+
+- question: How do I throw away everything I have done inside the transaction I am currently in?
+  topic: sql-commands
+  expect_anchor: SQL-ABORT
+  expect_paths: ["ROLLBACK > Description"]
+
+- question: My rows are scattered across the disk and range scans are slow. How do I physically reorder a table to match an index?
+  topic: sql-commands
+  expect_anchor: SQL-CLUSTER
+  expect_paths: ["CLUSTER > Description"]
+
+- question: How do I define a reusable piece of server-side logic that takes arguments and returns a value?
+  topic: sql-commands
+  expect_anchor: SQL-CREATEFUNCTION-DESCRIPTION
+  expect_paths: ["CREATE FUNCTION > Description"]
+
+- question: Two of my columns are correlated and the planner keeps underestimating row counts. How do I tell it about that relationship?
+  topic: sql-commands
+  expect_anchor: SQL-CREATESTATISTICS-DESCRIPTION
+  expect_paths: ["CREATE STATISTICS > Description"]
+
+- question: How do I remove particular rows from a table?
+  topic: sql-commands
+  expect_path: "DELETE > Description"
+
+- question: How do I empty a table completely without scanning and removing each row one by one?
+  topic: sql-commands
+  expect_path: "TRUNCATE > Description"
+
+- question: How do I stop a server from receiving replicated changes and tear that arrangement down?
+  topic: sql-commands
+  expect_path: "DROP SUBSCRIPTION > Description"
+
+- question: I have an open cursor. How do I pull the next batch of rows out of it?
+  topic: sql-commands
+  expect_path: "FETCH > Description"
+
+- question: How do I put a session setting back to whatever the default is?
+  topic: sql-commands
+  expect_path: "RESET > Description"
+
+- question: How do I reclaim space taken by rows that were deleted or updated?
+  topic: sql-commands
+  expect_path: "VACUUM > Description"
+
+# --- Client and server tools -------------------------------------------------
+
+- question: Which interactive terminal program ships with the database for typing queries by hand?
+  topic: tools
+  expect_path: "psql > Description"
+
+- question: How do I dump every database in the installation, including role definitions, in a single operation?
+  topic: tools
+  expect_anchor: APP-PG-DUMPALL-DESCRIPTION
+  expect_paths: ["pg_dumpall > Description"]
+
+- question: I have one full backup plus several incremental ones. How do I merge them into a directory I can actually start?
+  topic: tools
+  expect_anchor: APP-PGCOMBINEBACKUP
+  expect_paths: ["pg_combinebackup"]
+
+- question: How do I create a brand new storage area on disk before the server can be started for the first time?
+  topic: tools
+  expect_anchor: R1-APP-INITDB-1
+  expect_paths: ["initdb > Description"]
+
+- question: How do I inspect the internal state and last checkpoint of a cluster that is currently shut down?
+  topic: tools
+  expect_anchor: APP-PGCONTROLDATA
+  expect_paths: ["pg_controldata"]
+
+- question: My server refuses to start because the transaction log is damaged. What last-resort utility clears it?
+  topic: tools
+  expect_anchor: R1-APP-PGRESETWAL-1
+  expect_paths: ["pg_resetwal > Description"]
+
+- question: Is there a shell wrapper that physically reorders tables without me opening a SQL prompt?
+  topic: tools
+  expect_path: "clusterdb > Description"
+
+- question: How do I delete an entire database from the command line?
+  topic: tools
+  expect_path: "dropdb > Description"
+
+- question: How do I check my tables and indexes for signs of corruption?
+  topic: tools
+  expect_path: "pg_amcheck > Description"
+
+- question: How do I stream decoded change data to a file from a shell command?
+  topic: tools
+  expect_path: "pg_recvlogical > Description"
+
+# --- Administration ----------------------------------------------------------
+
+- question: How much memory should the server set aside for caching table and index pages?
+  topic: admin
+  expect_anchor: GUC-SHARED-BUFFERS
+  expect_paths: ["shared_buffers (integer)"]
+
+- question: How do I choose whether server messages go to a file, to syslog, or to the Windows event log?
+  topic: admin
+  expect_anchor: GUC-LOG-DESTINATION
+  expect_paths: ["log_destination (string)"]
+
+- question: How long does the server wait on a blocked lock before it starts checking for a circular wait?
+  topic: admin
+  expect_anchor: GUC-DEADLOCK-TIMEOUT
+  expect_paths: ["deadlock_timeout (integer)"]
+
+- question: The server will not start because of operating-system limits on shared memory. What do I need to raise?
+  topic: admin
+  expect_anchor: KERNEL-RESOURCES
+  expect_paths: ["Managing Kernel Resources"]
+
+- question: What are my options for protecting data both on disk and while it travels over the network?
+  topic: admin
+  expect_anchor: ENCRYPTION-OPTIONS
+  expect_paths: ["Encryption Options"]
+
+- question: Is there a built-in group that lets an account read every table without making it a superuser?
+  topic: admin
+  expect_anchor: PREDEFINED-ROLES
+  expect_paths: ["Predefined Roles"]
+
+- question: What is the difference between an account that can log in and a group used to hold privileges?
+  topic: admin
+  expect_anchor: DATABASE-ROLES
+
+- question: How do I control the sorting and comparison rules used for text in one particular column?
+  topic: admin
+  expect_anchor: COLLATION
+
+- question: How can an add-on package define settings of its own that the server will accept?
+  topic: admin
+  expect_anchor: RUNTIME-CONFIG-CUSTOM
+  expect_paths: ["Customized Options"]
+
+- question: How do I get the server's messages to appear in the Windows system log viewer?
+  topic: admin
+  expect_anchor: EVENT-LOG-REGISTRATION
+  expect_paths: ["Registering Event Log on Windows"]
+
+# --- Authentication ----------------------------------------------------------
+
+- question: Which file decides who is allowed to connect, from which addresses, and how they must prove it?
+  topic: authentication
+  expect_anchor: AUTH-PG-HBA-CONF
+  expect_paths: ["The pg_hba.conf File"]
+
+- question: How do I let an operating-system account connect under a different database account name?
+  topic: authentication
+  expect_anchor: AUTH-USERNAME-MAPS
+  expect_paths: ["User Name Maps"]
+
+- question: How do I let connections in without asking them to prove anything at all?
+  topic: authentication
+  expect_anchor: AUTH-TRUST
+  expect_paths: ["Trust Authentication"]
+
+- question: What are the ways the server can check a secret that the client sends when connecting?
+  topic: authentication
+  expect_anchor: AUTH-PASSWORD
+  expect_paths: ["Password Authentication"]
+
+- question: How do I use Kerberos single sign-on so users do not type credentials?
+  topic: authentication
+  expect_anchor: GSSAPI-AUTH
+  expect_paths: ["GSSAPI Authentication"]
+
+- question: What is the Windows-native single sign-on mechanism for verifying connecting clients?
+  topic: authentication
+  expect_anchor: SSPI-AUTH
+  expect_paths: ["SSPI Authentication"]
+
+- question: How do I verify a connection by asking a service on the client machine who owns it?
+  topic: authentication
+  expect_anchor: AUTH-IDENT
+  expect_paths: ["Ident Authentication"]
+
+- question: For connections over a local socket, how do I just trust the operating-system account name?
+  topic: authentication
+  expect_anchor: AUTH-PEER
+  expect_paths: ["Peer Authentication"]
+
+- question: How do I check connecting users against a central corporate directory service?
+  topic: authentication
+  expect_anchor: AUTH-LDAP
+  expect_paths: ["LDAP Authentication"]
+
+# --- Backup, restore and durability -----------------------------------------
+
+- question: How do I export a database into a file that I can load back in later?
+  topic: backup
+  expect_anchor: BACKUP-DUMP
+  expect_paths: ["SQL Dump"]
+
+- question: Can I simply copy the data directory to take a backup, and what do I have to be careful about?
+  topic: backup
+  expect_anchor: BACKUP-FILE
+  expect_paths: ["File System Level Backup"]
+
+- question: How do I set things up so that I can recover the database to any chosen moment in the past?
+  topic: backup
+  expect_anchor: CONTINUOUS-ARCHIVING
+
+- question: How do I make the server notice silent corruption of data pages on disk?
+  topic: backup
+  expect_anchor: CHECKSUMS
+  expect_paths: ["Data Checksums"]
+
+- question: Why does the server record changes into a log before writing them into the data files?
+  topic: backup
+  expect_anchor: WAL-INTRO
+  expect_paths: ["Write-Ahead Logging (WAL)"]
+
+- question: How can I make commits return faster by accepting that a crash might lose the most recent ones?
+  topic: backup
+  expect_anchor: WAL-ASYNC-COMMIT
+  expect_paths: ["Asynchronous Commit"]
+
+- question: How do I tune how frequently the server flushes everything to disk and how much log it retains?
+  topic: backup
+  expect_anchor: WAL-CONFIGURATION
+  expect_paths: ["WAL Configuration"]
+
+- question: What does the database rely on to survive a power cut or an operating-system crash?
+  topic: backup
+  expect_anchor: WAL-RELIABILITY
+
+- question: How are the log records themselves laid out and managed on disk?
+  topic: backup
+  expect_anchor: WAL-INTERNALS
+  expect_paths: ["WAL Internals"]
+
+# --- Replication and high availability ---------------------------------------
+
+- question: What approaches exist for keeping a second server in step with the first, and how do they differ?
+  topic: replication
+  expect_anchor: DIFFERENT-REPLICATION-SOLUTIONS
+  expect_paths: ["Comparison of Different Solutions"]
+
+- question: How do I keep a spare machine up to date by shipping completed log files across to it?
+  topic: replication
+  expect_anchor: WARM-STANDBY
+
+- question: The primary has died. How do I promote the spare to take over?
+  topic: replication
+  expect_anchor: WARM-STANDBY-FAILOVER
+  expect_paths: ["Failover"]
+
+- question: How do I let people run read-only queries against the backup machine while it keeps applying changes?
+  topic: replication
+  expect_anchor: HOT-STANDBY
+  expect_paths: ["Hot Standby"]
+
+- question: How do I copy changes for a chosen set of tables to another database instead of duplicating the whole cluster?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION
+
+- question: On the sending side, how do I declare which tables are made available for others to consume?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION-PUBLICATION
+
+- question: On the receiving side, how do I connect to the source and start applying its changes?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION-SUBSCRIPTION
+
+- question: How do I send across only the rows that satisfy a condition rather than every row?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION-ROW-FILTER
+  expect_paths: ["Row Filters"]
+
+- question: How do I send across only some of a table's columns?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION-COL-LISTS
+  expect_paths: ["Column Lists"]
+
+- question: How do I make streaming of changes survive a switchover to a standby machine?
+  topic: replication
+  expect_anchor: LOGICAL-REPLICATION-FAILOVER
+  expect_paths: ["Logical Replication Failover"]
+
+# --- Indexing ----------------------------------------------------------------
+
+- question: Why would I add an index at all, and what does having one cost me?
+  topic: indexing
+  expect_anchor: INDEXES-INTRO
+
+- question: Which index structures are available, and when is each one the right choice?
+  topic: indexing
+  expect_anchor: INDEXES-TYPES
+  expect_paths: ["Index Types"]
+
+- question: Can a single index cover more than one column, and when does that help?
+  topic: indexing
+  expect_anchor: INDEXES-MULTICOLUMN
+  expect_paths: ["Multicolumn Indexes"]
+
+- question: How do indexes help when I ask for results back in a particular order?
+  topic: indexing
+  expect_anchor: INDEXES-ORDERING
+  expect_paths: ["Indexes and ORDER BY"]
+
+- question: Can the planner use two different indexes together to satisfy one query?
+  topic: indexing
+  expect_anchor: INDEXES-BITMAP-SCANS
+  expect_paths: ["Combining Multiple Indexes"]
+
+- question: How do I stop the same value being inserted into a column twice?
+  topic: indexing
+  expect_anchor: INDEXES-UNIQUE
+  expect_paths: ["Unique Indexes"]
+
+- question: How do I index the result of a computation rather than the raw column value?
+  topic: indexing
+  expect_anchor: INDEXES-EXPRESSIONAL
+  expect_paths: ["Indexes on Expressions"]
+
+- question: How do I build an index that covers only some of the rows in a table?
+  topic: indexing
+  expect_anchor: INDEXES-PARTIAL
+  expect_paths: ["Partial Indexes"]
+
+- question: How can a query be satisfied entirely from an index without visiting the table?
+  topic: indexing
+  expect_anchor: INDEXES-INDEX-ONLY-SCANS
+  expect_paths: ["Index-Only Scans and Covering Indexes"]
+
+- question: How do I control which comparison behaviour an index applies to a column?
+  topic: indexing
+  expect_anchor: INDEXES-OPCLASS
+  expect_paths: ["Operator Classes and Operator Families"]
+
+# --- Query planning ----------------------------------------------------------
+
+- question: How do I see what strategy the server chose to execute my query?
+  topic: planning
+  expect_anchor: USING-EXPLAIN
+
+- question: Where does the optimizer get its guess of how many rows a condition will match?
+  topic: planning
+  expect_anchor: PLANNER-STATS-SINGLE-COLUMN
+  expect_paths: ["Single-Column Statistics"]
+
+- question: How can I force my joins to be performed in the order I wrote them?
+  topic: planning
+  expect_anchor: EXPLICIT-JOINS
+  expect_paths: ["Controlling the Planner with Explicit JOIN Clauses"]
+
+- question: When bulk loading rows, why is wrapping the whole load in one transaction so much faster?
+  topic: planning
+  expect_anchor: DISABLE-AUTOCOMMIT
+  expect_paths: ["Disable Autocommit"]
+
+- question: Which safety settings can I relax to speed up a throwaway database I do not mind losing?
+  topic: planning
+  expect_anchor: NON-DURABILITY
+  expect_paths: ["Non-Durable Settings"]
+
+- question: Are there worked examples showing how the row-count guesses are actually calculated?
+  topic: planning
+  expect_anchor: ROW-ESTIMATION-EXAMPLES
+  expect_paths: ["Row Estimation Examples"]
+
+- question: One of my columns determines another. How does that change the estimate when I filter on both?
+  topic: planning
+  expect_anchor: FUNCTIONAL-DEPENDENCIES
+  expect_paths: ["Functional Dependencies"]
+
+- question: Can the collected statistics expose values from rows a user is not permitted to read?
+  topic: planning
+  expect_anchor: PLANNER-STATS-SECURITY
+  expect_paths: ["Planner Statistics and Security"]
+
+- question: How does the optimizer turn the information it has gathered into a choice of plan?
+  topic: planning
+  expect_anchor: PLANNER-STATS-DETAILS
+
+# --- Data types --------------------------------------------------------------
+
+- question: Which type should I use for currency amounts with a fixed number of decimal places?
+  topic: datatypes
+  expect_anchor: DATATYPE-MONEY
+  expect_paths: ["Monetary Types"]
+
+- question: How do I store raw bytes, such as the contents of an image file?
+  topic: datatypes
+  expect_anchor: DATATYPE-BINARY
+  expect_paths: ["Binary Data Types"]
+
+- question: How do I store a simple yes or no flag?
+  topic: datatypes
+  expect_anchor: DATATYPE-BOOLEAN
+  expect_paths: ["Boolean Type"]
+
+- question: How do I store points, lines and other shapes on a plane?
+  topic: datatypes
+  expect_anchor: DATATYPE-GEOMETRIC
+  expect_paths: ["Geometric Types"]
+
+- question: How do I store a fixed-length sequence of ones and zeros?
+  topic: datatypes
+  expect_anchor: DATATYPE-BIT
+  expect_paths: ["Bit String Types"]
+
+- question: Which type holds a 128-bit globally unique identifier?
+  topic: datatypes
+  expect_anchor: DATATYPE-UUID
+  expect_paths: ["UUID Type"]
+
+- question: How do I store structured documents and then query the fields inside them?
+  topic: datatypes
+  expect_anchor: DATATYPE-JSON
+
+- question: How do I define a column that groups several named fields together as one value?
+  topic: datatypes
+  expect_anchor: ROWTYPES
+
+- question: How do I make a reusable type that is an existing type plus a constraint?
+  topic: datatypes
+  expect_anchor: DOMAINS
+  expect_paths: ["Domain Types"]
+
+- question: Which type represents a position within the transaction log?
+  topic: datatypes
+  expect_anchor: DATATYPE-PG-LSN
+  expect_paths: ["pg_lsn Type"]
+
+# --- Functions and operators -------------------------------------------------
+
+- question: How do I trim, pad, or take a substring out of a piece of text?
+  topic: functions
+  expect_anchor: FUNCTIONS-STRING
+
+- question: Which operators are available for comparing two values against each other?
+  topic: functions
+  expect_anchor: FUNCTIONS-COMPARISON
+  expect_paths: ["Comparison Functions and Operators"]
+
+- question: How do I render a timestamp as text in a layout I specify?
+  topic: functions
+  expect_anchor: FUNCTIONS-FORMATTING
+  expect_paths: ["Data Type Formatting Functions"]
+
+- question: How do I list the permitted labels of a custom set-of-values type?
+  topic: functions
+  expect_anchor: FUNCTIONS-ENUM
+  expect_paths: ["Enum Support Functions"]
+
+- question: How do I test whether one network address range contains another?
+  topic: functions
+  expect_anchor: FUNCTIONS-NET
+  expect_paths: ["Network Address Functions and Operators"]
+
+- question: How do I generate a random globally unique identifier value?
+  topic: functions
+  expect_anchor: FUNCTIONS-UUID
+  expect_paths: ["UUID Functions"]
+
+- question: How do I extract a nested field from a stored document value?
+  topic: functions
+  expect_anchor: FUNCTIONS-JSON
+
+- question: How do I return one value or another depending on a condition, inside a query?
+  topic: functions
+  expect_anchor: FUNCTIONS-CONDITIONAL
+  expect_paths: ["Conditional Expressions"]
+
+- question: How do I test whether two spans of values overlap each other?
+  topic: functions
+  expect_anchor: FUNCTIONS-RANGE
+  expect_paths: ["Range/Multirange Functions and Operators"]
+
+- question: What operations can I perform on a string of bits?
+  topic: functions
+  expect_anchor: FUNCTIONS-BITSTRING
+  expect_paths: ["Bit String Functions and Operators"]
+
+# --- Internals ---------------------------------------------------------------
+
+- question: How does the database let readers and writers work at the same time without blocking one another?
+  topic: internals
+  expect_anchor: MVCC
+
+- question: Which catalog table lists the available index access methods?
+  topic: internals
+  expect_anchor: CATALOG-PG-AM
+
+- question: Where are the character-set conversion definitions recorded?
+  topic: internals
+  expect_anchor: CATALOG-PG-CONVERSION
+  expect_paths: ["pg_conversion"]
+
+- question: Which catalog holds the extra details about tables that actually live in another system?
+  topic: internals
+  expect_anchor: CATALOG-PG-FOREIGN-TABLE
+  expect_paths: ["pg_foreign_table"]
+
+- question: Where are privileges granted on individual configuration settings stored?
+  topic: internals
+  expect_anchor: CATALOG-PG-PARAMETER-ACL
+  expect_paths: ["pg_parameter_acl"]
+
+- question: Which catalog records the properties of number generators?
+  topic: internals
+  expect_anchor: CATALOG-PG-SEQUENCE
+  expect_paths: ["pg_sequence"]
+
+- question: Where does the system record which triggers are defined on which tables?
+  topic: internals
+  expect_anchor: CATALOG-PG-TRIGGER
+  expect_paths: ["pg_trigger"]
+
+- question: How do I see which add-on packages are installable on this server?
+  topic: internals
+  expect_anchor: VIEW-PG-AVAILABLE-EXTENSIONS
+  expect_paths: ["pg_available_extensions"]
+
+- question: How do I list the precomputed query results stored in the database?
+  topic: internals
+  expect_anchor: VIEW-PG-MATVIEWS
+  expect_paths: ["pg_matviews"]
+
+- question: How do I inspect the current values of all runtime settings from SQL?
+  topic: internals
+  expect_anchor: VIEW-PG-SETTINGS
+  expect_paths: ["pg_settings"]

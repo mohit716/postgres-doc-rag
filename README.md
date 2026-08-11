@@ -63,6 +63,17 @@ times the size, which is the more interesting half of the result. That
 experiment, including the extraction bug that only appeared at scale, is in
 [docs/full-corpus.md](docs/full-corpus.md).
 
+A third gold set of **107 questions spanning eleven areas** of the manual — SQL
+commands, tools, administration, authentication, backup, replication, indexing,
+planning, data types, functions, internals — replaces keyword lookups with
+questions phrased the way a user would ask them. It is much harder: dense
+retrieval reaches 44.9% Recall@5 on it, against 74.8% for the answer being
+somewhere in the top 50. Cross-encoder reranking closes about a quarter of that
+gap, hybrid BM25 fusion an equal amount, and the two do not stack. The
+comparison of dense, BM25, hybrid and reranked retrieval — including why a 22M
+parameter reranker matches a 278M one at eight times the speed — is in
+[docs/retrieval-experiments.md](docs/retrieval-experiments.md).
+
 ## How it works
 
 Each stage reads and writes JSONL on disk instead of calling the next stage in
@@ -176,6 +187,24 @@ otherwise. Setup, verification and the measurements are in
 [docs/full-corpus.md](docs/full-corpus.md), alongside the ingestion statistics
 and what the larger corpus revealed.
 
+## Comparing retrieval methods
+
+Dense, BM25, hybrid and cross-encoder reranking can be scored against either gold
+set with the ingestion pipeline held constant — nothing is re-crawled or
+re-embedded, and the cross-encoders are ONNX models from fastembed, so the stack
+still has no PyTorch dependency.
+
+```bash
+python scripts/build_goldset.py sample --per-area 11   # propose targets by topic
+python scripts/build_goldset.py verify --goldset full  # check a written set
+pgdocrag --corpus full experiment --source html --rerankers minilm,bge
+```
+
+`verify` is the interesting half: it checks that every expectation resolves to a
+chunk that exists, that no label is loose enough to match half the corpus, and
+that no question leaks its own answer's identifier. It never runs retrieval, so
+the gold set cannot be quietly tuned to the retriever.
+
 ## Structure-only extraction
 
 The parsers were written against structural summaries, never against document
@@ -237,21 +266,22 @@ src/pgdocrag/
   chunk/     sectioner.py  tokenizer.py
   embed/     embedder.py  pipeline.py
   store/     base.py  chroma_store.py
-  evaluate/  goldset.yaml  run_eval.py  compare_formats.py
+  retrieve/  bm25.py  rerank.py  fusion.py
+  evaluate/  goldset.yaml  goldset_full.yaml  run_eval.py  experiments.py
+             compare_formats.py
 scripts/     probe_structure.py  probe_pdf.py  peek.py  validate_chunks.py
-             benchmark_embed.py
+             benchmark_embed.py  build_goldset.py
 tests/       test_normalize.py  test_chunker.py
 docs/        structure-notes.md  findings.md  full-corpus.md
+             retrieval-experiments.md
 data/        gitignored; fully reproducible from the CLI
 ```
 
 ## Limitations and next steps
 
-- **No reranking, which is where the biggest win is.** Failures are a sibling
-  parameter outranking the right one (`bgwriter_flush_after` for a question about
-  `fsync`), not a missing answer — with the one PDF exception below. 96.2% of
-  HTML answers already sit inside the top 20, so a cross-encoder reranking that
-  window is the highest-value addition, with hybrid BM25 scoring second.
+- **Candidate generation is the bottleneck on reference material.** Reranking and
+  hybrid retrieval have now been measured (see above); neither repairs the half of
+  command and tool questions whose answer never enters the top 50 at all.
 - **PDF anchors are reconstructed from a pattern, and it has gaps.** Parameter
   names are matched as `name (type)`, which rejects mixed-case names like
   `TimeZone` and lines listing several parameters at once — six anchors present
@@ -261,5 +291,7 @@ data/        gitignored; fully reproducible from the CLI
   unchanged.
 - **Tables are not recovered from the PDF**, and `colspan`/`rowspan` are flattened
   even from HTML, because markdown cannot express them.
-- **The gold set is single-label.** Each question expects one anchor or breadcrumb,
-  so a genuinely relevant alternative passage scores as a miss.
+- **The 52-question gold set is single-label**, so a genuinely relevant
+  alternative passage scores as a miss. The 107-question set accepts any-of
+  expectations; the older one is left as it is because its published numbers were
+  measured under the stricter rule.

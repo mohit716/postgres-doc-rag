@@ -44,6 +44,11 @@ class Device(str, Enum):
     cpu = "cpu"
 
 
+class GoldSet(str, Enum):
+    config = "config"
+    full = "full"
+
+
 def _configure_stdout() -> None:
     """The docs contain em dashes; the Windows console codepage cannot encode them."""
     for stream in (sys.stdout, sys.stderr):
@@ -195,11 +200,43 @@ def ask(
 def evaluate(
     source: str = typer.Option("html", help="Collection to evaluate."),
     top_k: int = typer.Option(5, "--top-k", "-k"),
+    goldset: GoldSet = typer.Option(
+        GoldSet.config,
+        help="config: the 52 configuration questions. full: the corpus-wide set.",
+    ),
 ) -> None:
-    """Score retrieval quality against the anchored gold set."""
+    """Score retrieval quality against a gold set."""
     from .evaluate import run_eval
 
-    run_eval.main(source_format=source, top_k=top_k)
+    run_eval.main(source_format=source, top_k=top_k, goldset=goldset.value)
+
+
+@app.command()
+def experiment(
+    source: Source = typer.Option(Source.html, help="Collection to run against."),
+    goldset: GoldSet = typer.Option(GoldSet.full, help="Which gold set to score."),
+    rerankers: str = typer.Option(
+        "minilm,bge", help="Comma-separated cross-encoders, or 'none' to skip reranking."
+    ),
+    device: Device = typer.Option(
+        Device(config.DEFAULT_EMBED_DEVICE), help="Execution provider for the reranker."
+    ),
+) -> None:
+    """Compare dense, lexical, hybrid and reranked retrieval on one gold set."""
+    from .evaluate import experiments
+
+    chosen = tuple(
+        name.strip()
+        for name in rerankers.split(",")
+        if name.strip() and name.strip().lower() != "none"
+    )
+    for target in ("html", "pdf"):
+        if _wants(source, target):
+            try:
+                experiments.run(target, goldset=goldset.value, rerankers=chosen, device=device.value)
+            except (RuntimeError, ValueError) as error:
+                typer.secho(str(error), fg=typer.colors.RED)
+                raise typer.Exit(code=1) from error
 
 
 @app.command()

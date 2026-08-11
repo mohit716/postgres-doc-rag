@@ -61,7 +61,7 @@ def session_providers(model) -> list[str]:
     return list(get_providers()) if get_providers else []
 
 
-def _providers_for(device: str) -> list[str]:
+def providers_for(device: str) -> list[str]:
     """Translate a device choice into an ONNX Runtime provider list.
 
     Always explicit, never left to the default. Where onnxruntime-gpu is
@@ -146,7 +146,7 @@ class Embedder:
 
             self._model = TextEmbedding(
                 model_name=self.model_name,
-                providers=_providers_for(self.device),
+                providers=providers_for(self.device),
             )
             self.providers = session_providers(self._model)
             if self.device == "cuda" and not self.on_gpu:
