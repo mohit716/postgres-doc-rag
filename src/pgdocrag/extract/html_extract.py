@@ -46,7 +46,9 @@ from ..schema import (
     write_jsonl,
 )
 
-OUTPUT_PATH = config.INTERIM_DIR / "html_docs.jsonl"
+def output_path() -> Path:
+    """Resolved per call so the active corpus is honoured, not captured at import."""
+    return config.INTERIM_DIR / "html_docs.jsonl"
 
 # refnamediv is deliberately absent: its heading duplicates the refentry title,
 # so it is folded into the parent rather than becoming its own section.
@@ -499,7 +501,8 @@ def extract_all(*, verbose: bool = True) -> Path:
                 f"{block_count:>5} blocks"
             )
 
-    written = write_jsonl(OUTPUT_PATH, documents)
+    destination = output_path()
+    written = write_jsonl(destination, documents)
     if verbose:
-        print(f"\nWrote {written} documents to {OUTPUT_PATH}")
-    return OUTPUT_PATH
+        print(f"\nWrote {written} documents to {destination}")
+    return destination

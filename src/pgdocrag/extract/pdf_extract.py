@@ -41,7 +41,9 @@ from ..schema import (
     write_jsonl,
 )
 
-OUTPUT_PATH = config.INTERIM_DIR / "pdf_docs.jsonl"
+def output_path() -> Path:
+    """Resolved per call so the active corpus is honoured, not captured at import."""
+    return config.INTERIM_DIR / "pdf_docs.jsonl"
 
 # A configuration parameter as the PDF renders it: "work_mem (integer)". The
 # bookmark outline stops above this level, so without recognising these lines the
@@ -440,22 +442,35 @@ def _matches(entry: _Entry, wanted: dict[str, _Wanted]) -> bool:
     return target.context_key in ancestor_keys
 
 
+def _encloses(outer: _Entry, inner: _Entry) -> bool:
+    return (
+        outer is not inner
+        and outer.page <= inner.page
+        and inner.end_page <= outer.end_page
+        and outer.level < inner.level
+    )
+
+
 def _select_roots(entries: list[_Entry], wanted: dict[str, _Wanted]) -> list[_Entry]:
-    """Pick the outline entries matching the HTML corpus, outermost only."""
+    """Pick the outline entries mirroring the HTML corpus.
+
+    Matched entries nest — a matched chapter can contain matched subsections — and
+    `config.PDF_SCOPE_RULE` decides which survives. Keeping the innermost entries
+    mirrors the HTML side more closely, since HTML excludes navigation-only parent
+    pages for the same reason, at the cost of skipping any chapter preamble that
+    sits above the first matched subsection.
+    """
     matched = [entry for entry in entries if _matches(entry, wanted)]
 
-    selected: list[_Entry] = []
-    for entry in matched:
-        contained = any(
-            other is not entry
-            and other.page <= entry.page
-            and entry.end_page <= other.end_page
-            and other.level < entry.level
-            for other in matched
-        )
-        if not contained:
-            selected.append(entry)
-    return selected
+    if config.PDF_SCOPE_RULE == "innermost":
+        return [
+            entry
+            for entry in matched
+            if not any(_encloses(entry, other) for other in matched)
+        ]
+    return [
+        entry for entry in matched if not any(_encloses(other, entry) for other in matched)
+    ]
 
 
 # --- document assembly ------------------------------------------------------
@@ -581,8 +596,9 @@ def extract_all(*, verbose: bool = True) -> Path:
                 f"{len(document.sections):>4} sections"
             )
 
-    written = write_jsonl(OUTPUT_PATH, documents)
+    destination = output_path()
+    written = write_jsonl(destination, documents)
     doc.close()
     if verbose:
-        print(f"\nWrote {written} documents to {OUTPUT_PATH}")
-    return OUTPUT_PATH
+        print(f"\nWrote {written} documents to {destination}")
+    return destination

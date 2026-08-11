@@ -2,33 +2,99 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR = PROJECT_ROOT / "data"
+
+# Raw downloads and the embedding cache are shared by every corpus. Both are
+# content-addressed, so a larger run reuses whatever a smaller one already paid
+# for instead of re-fetching pages or re-embedding identical text.
 RAW_HTML_DIR = DATA_DIR / "raw" / "html"
 RAW_PDF_DIR = DATA_DIR / "raw" / "pdf"
+EMBED_CACHE_DIR = DATA_DIR / "embed_cache"
+
+
+# --- Corpora ----------------------------------------------------------------
+
+# Two corpora coexist. `slice` is the benchmark the published metrics describe:
+# a curated sample chosen to exercise both HTML structure families. `full`
+# ingests the entire manual. Everything derived from the source — documents,
+# chunks, vectors, reports — is namespaced per corpus, so running one experiment
+# can never overwrite the other's results.
+DEFAULT_CORPUS = "slice"
+CORPORA = ("slice", "full")
+
+CORPUS = DEFAULT_CORPUS
+PDF_SCOPE_RULE = "outermost"
+CORPUS_DIR = DATA_DIR
 INTERIM_DIR = DATA_DIR / "interim"
 CHUNKS_DIR = DATA_DIR / "chunks"
 VECTORSTORE_DIR = DATA_DIR / "vectorstore"
-EMBED_CACHE_DIR = DATA_DIR / "embed_cache"
 REPORTS_DIR = DATA_DIR / "reports"
+CHROMA_DIR = VECTORSTORE_DIR / "chroma"
+HTML_MANIFEST_PATH = RAW_HTML_DIR / "manifest.json"
+ALL_DIRS: list[Path] = []
 
-ALL_DIRS = [
-    RAW_HTML_DIR,
-    RAW_PDF_DIR,
-    INTERIM_DIR,
-    CHUNKS_DIR,
-    VECTORSTORE_DIR,
-    EMBED_CACHE_DIR,
-    REPORTS_DIR,
-]
+
+def use_corpus(name: str) -> None:
+    """Point every derived-artifact path at the named corpus.
+
+    Runs once at import time and again from the CLI's `--corpus` option. The CLI
+    imports stage modules lazily, so this always lands before any stage reads a
+    path.
+    """
+    global CORPUS, CORPUS_DIR, INTERIM_DIR, CHUNKS_DIR, VECTORSTORE_DIR
+    global REPORTS_DIR, CHROMA_DIR, HTML_MANIFEST_PATH, ALL_DIRS, PDF_SCOPE_RULE
+
+    if name not in CORPORA:
+        raise ValueError(
+            f"Unknown corpus {name!r}; expected one of {', '.join(CORPORA)}"
+        )
+
+    CORPUS = name
+    # Matched PDF outline entries nest, and which one wins changes the result.
+    # "innermost" is the truer mirror of the HTML corpus — one page, one document
+    # — and the only rule that survives full scale, where the manual's own parts
+    # match and "outermost" collapses 1,134 matches into 26 documents spanning
+    # hundreds of pages each. The default corpus stays on "outermost" because its
+    # published metrics were measured there, not because it is the better rule.
+    PDF_SCOPE_RULE = "outermost" if name == DEFAULT_CORPUS else "innermost"
+    # The default corpus keeps the flat layout its artifacts were written under,
+    # so introducing a second corpus neither moves nor invalidates them.
+    CORPUS_DIR = DATA_DIR if name == DEFAULT_CORPUS else DATA_DIR / name
+    INTERIM_DIR = CORPUS_DIR / "interim"
+    CHUNKS_DIR = CORPUS_DIR / "chunks"
+    VECTORSTORE_DIR = CORPUS_DIR / "vectorstore"
+    REPORTS_DIR = CORPUS_DIR / "reports"
+    CHROMA_DIR = VECTORSTORE_DIR / "chroma"
+    # The manifest, not the page cache, is what bounds a corpus: the cache is
+    # shared, and the extractor walks the manifest. The default corpus keeps its
+    # original location for the same reason as the directories above.
+    HTML_MANIFEST_PATH = (
+        RAW_HTML_DIR / "manifest.json"
+        if name == DEFAULT_CORPUS
+        else CORPUS_DIR / "html_manifest.json"
+    )
+    ALL_DIRS = [
+        RAW_HTML_DIR,
+        RAW_PDF_DIR,
+        EMBED_CACHE_DIR,
+        INTERIM_DIR,
+        CHUNKS_DIR,
+        VECTORSTORE_DIR,
+        REPORTS_DIR,
+    ]
 
 
 def ensure_dirs() -> None:
     for directory in ALL_DIRS:
         directory.mkdir(parents=True, exist_ok=True)
+
+
+use_corpus(os.environ.get("PGDOCRAG_CORPUS", DEFAULT_CORPUS))
 
 
 # --- Source data ------------------------------------------------------------
@@ -133,12 +199,28 @@ CHUNK_OVERLAP_RATIO = 0.12
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
+# --- Embedding device -------------------------------------------------------
+
+# Which ONNX Runtime execution provider embeds chunks. The model, its weights
+# and the tokenizer are identical either way — only the kernels differ — so
+# vectors stay comparable across devices and the cache needs no device key.
+#
+# "auto" takes CUDA when ONNX Runtime can genuinely offer it and stays on CPU
+# otherwise. "cuda" refuses to fall back, which is what a multi-hour job wants:
+# a misconfigured GPU should fail in seconds, not silently cost hours of CPU.
+EMBED_DEVICES = ("auto", "cuda", "cpu")
+DEFAULT_EMBED_DEVICE = "auto"
+EMBED_DEVICE = os.environ.get("PGDOCRAG_EMBED_DEVICE", DEFAULT_EMBED_DEVICE)
+
+
 # --- Vector store -----------------------------------------------------------
 
-CHROMA_DIR = VECTORSTORE_DIR / "chroma"
 COLLECTION_PREFIX = "pgdocs"
 
 
+# Collection names carry no corpus label: each corpus has its own Chroma
+# directory, so the names cannot collide and the default corpus keeps the
+# collections its published metrics were measured against.
 def collection_name(source_format: str) -> str:
     """HTML and PDF live in separate collections: they are the same content in
     two formats, so a single collection would return duplicate hits."""

@@ -43,12 +43,25 @@ cleaned up automatically?" → `autovacuum`).
 | --- | --- | --- |
 | chunks | 1,840 | 1,322 |
 | Recall@5 | 78.8% | 80.8% |
+| Recall@50 | 100% | 98.1% |
 | MRR | 0.653 | 0.619 |
 | nDCG@5 | 0.687 | 0.667 |
 
 Retrieval works about equally well from either format, which is the result the
-dual-format design was built to test. Details in
-[docs/findings.md](docs/findings.md).
+dual-format design was built to test.
+
+Recall@50 says something more specific about where the remaining errors live:
+every expected chunk that exists in a collection is returned within the top 50,
+so the shortfall at k=5 is purely a question of ordering. The one exception is
+not a ranking failure — the PDF collection contains no chunk for `TimeZone` at
+all, making 98.1% its ceiling. Details in [docs/findings.md](docs/findings.md).
+
+Those numbers describe a curated slice. Ingesting the **entire** manual — 1,146
+HTML pages, 20,431 chunks — costs about 15 points of Recall@5: 63.5% for HTML and
+65.4% for PDF. The two formats stay within two points of each other even at six
+times the size, which is the more interesting half of the result. That
+experiment, including the extraction bug that only appeared at scale, is in
+[docs/full-corpus.md](docs/full-corpus.md).
 
 ## How it works
 
@@ -103,7 +116,9 @@ or orphaning a table header. Every chunk is prefixed with its breadcrumb, so the
 embedded text carries context its body alone would not.
 
 **Embed and store.** `bge-small-en-v1.5` through ONNX Runtime: 384 dimensions, a
-512-token window, no PyTorch dependency. Vectors are cached by content hash, so
+512-token window, no PyTorch dependency. Running on ONNX also makes CPU and GPU
+a choice of execution provider rather than a change of model, which is why the
+two produce interchangeable vectors. Vectors are cached by content hash, so
 re-running after an unrelated change re-embeds only what actually changed. HTML
 and PDF live in separate Chroma collections because they are the same content —
 one collection would return each answer twice.
@@ -126,9 +141,40 @@ pgdocrag compare
 pgdocrag info
 ```
 
-`--scope full` crawls all ~1,100 HTML pages instead of the development slice.
 Embedding is the slow part: roughly 2-3 chunks/second on CPU, so about 15 minutes
-for the slice and proportionally longer for the full manual.
+for the slice.
+
+To ingest the whole manual instead of the slice, run the same stages under a
+second corpus. Raw pages and the vector cache are shared, while documents,
+chunks, collections and reports are namespaced, so the benchmark above cannot be
+overwritten:
+
+```bash
+pgdocrag --corpus full collect --source all    # 1,146 pages, ~18 min at 1 req/s
+pgdocrag --corpus full extract --source all
+pgdocrag --corpus full chunk   --source all
+```
+
+That comes to ~20,400 chunks, and on CPU they embed at 0.85 chunks/second rather
+than 2-3 because full-corpus chunks are longer — around 6.7 hours.
+
+An NVIDIA GPU collapses that to about 19 minutes. Embedding runs through ONNX
+Runtime, so moving it to the GPU is an execution-provider change rather than a
+model change: same `bge-small-en-v1.5` graph, same tokenizer, vectors that agree
+with the CPU's to a cosine of 0.999996. On a 4 GB GTX 1650 it measures 16.7
+against 0.85 chunks/second, a 19.6x speedup, peaking at 1.8 GB of VRAM.
+
+```bash
+pgdocrag device                                # what would embedding actually use?
+pgdocrag --corpus full embed --source all --device cuda
+python scripts/benchmark_embed.py --corpus full --source html
+```
+
+`--device cuda` refuses to fall back to CPU, which is what a long run wants;
+`auto`, the default, prefers the GPU when there is one and stays on CPU
+otherwise. Setup, verification and the measurements are in
+[docs/full-corpus.md](docs/full-corpus.md), alongside the ingestion statistics
+and what the larger corpus revealed.
 
 ## Structure-only extraction
 
@@ -193,17 +239,23 @@ src/pgdocrag/
   store/     base.py  chroma_store.py
   evaluate/  goldset.yaml  run_eval.py  compare_formats.py
 scripts/     probe_structure.py  probe_pdf.py  peek.py  validate_chunks.py
+             benchmark_embed.py
 tests/       test_normalize.py  test_chunker.py
-docs/        structure-notes.md  findings.md
+docs/        structure-notes.md  findings.md  full-corpus.md
 data/        gitignored; fully reproducible from the CLI
 ```
 
 ## Limitations and next steps
 
-- **Dense retrieval alone misses exact identifiers.** Most failures are a sibling
+- **No reranking, which is where the biggest win is.** Failures are a sibling
   parameter outranking the right one (`bgwriter_flush_after` for a question about
-  `fsync`). Hybrid retrieval — BM25 or SPLADE fused with the dense scores — is the
-  standard fix and the highest-value next addition.
+  `fsync`), not a missing answer — with the one PDF exception below. 96.2% of
+  HTML answers already sit inside the top 20, so a cross-encoder reranking that
+  window is the highest-value addition, with hybrid BM25 scoring second.
+- **PDF anchors are reconstructed from a pattern, and it has gaps.** Parameter
+  names are matched as `name (type)`, which rejects mixed-case names like
+  `TimeZone` and lines listing several parameters at once — six anchors present
+  in HTML are missing from the PDF collection as a result.
 - **No answer generation.** The goal is returning the correct passage; retrieval
   quality is what the pipeline is judged on. Generation would sit on top
   unchanged.

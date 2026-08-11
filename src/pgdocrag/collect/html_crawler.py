@@ -19,7 +19,9 @@ from bs4 import BeautifulSoup
 from .. import config
 from . import fetcher
 
-MANIFEST_PATH = config.RAW_HTML_DIR / "manifest.json"
+def manifest_path() -> Path:
+    """Resolved per call so switching corpus is picked up, not captured at import."""
+    return config.HTML_MANIFEST_PATH
 
 
 @dataclass
@@ -38,14 +40,16 @@ class PageRecord:
 
 
 def load_manifest() -> dict[str, PageRecord]:
-    if not MANIFEST_PATH.exists():
+    path = manifest_path()
+    if not path.exists():
         return {}
-    payload = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8"))
     return {slug: PageRecord(**record) for slug, record in payload.get("pages", {}).items()}
 
 
 def save_manifest(records: dict[str, PageRecord]) -> None:
-    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    path = manifest_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "pg_version": config.PG_VERSION,
         "base_url": config.DOCS_BASE_URL,
@@ -53,7 +57,7 @@ def save_manifest(records: dict[str, PageRecord]) -> None:
         "page_count": len(records),
         "pages": {slug: asdict(record) for slug, record in sorted(records.items())},
     }
-    MANIFEST_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def slug_for(url: str) -> str:

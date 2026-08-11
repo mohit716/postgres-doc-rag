@@ -16,6 +16,74 @@ import numpy as np
 
 from .. import config
 
+CUDA_PROVIDER = "CUDAExecutionProvider"
+CPU_PROVIDER = "CPUExecutionProvider"
+
+
+def cuda_available() -> tuple[bool, str]:
+    """Whether ONNX Runtime in this interpreter can offer a CUDA device.
+
+    Returns the reason alongside the verdict, so a caller can explain a fallback
+    instead of silently taking one.
+    """
+    try:
+        import onnxruntime as ort
+    except ImportError as error:
+        return False, f"onnxruntime is not importable ({error})"
+
+    # Tested before preloading, not after: the provider list reflects what the
+    # wheel was compiled with, and asking a CPU-only build to preload CUDA
+    # libraries only produces a warning about the build it already is.
+    if CUDA_PROVIDER not in ort.get_available_providers():
+        return False, "this onnxruntime build does not register CUDAExecutionProvider"
+
+    # ORT 1.21+ loads the CUDA and cuDNN shared libraries shipped inside the
+    # nvidia-*-cu12 wheels. Without this call they are found only if a system
+    # CUDA toolkit happens to be on PATH, which on a driver-only machine it is not.
+    preload = getattr(ort, "preload_dlls", None)
+    if preload is not None:
+        try:
+            preload()
+        except Exception as error:
+            return False, f"CUDA libraries failed to load ({error})"
+    return True, "CUDAExecutionProvider is registered"
+
+
+def session_providers(model) -> list[str]:
+    """The providers the live ONNX session actually holds.
+
+    A *registered* provider is not a *used* one: when CUDA initialisation fails,
+    ORT logs a warning and quietly runs on CPU. Reading them back off the
+    session is the only trustworthy confirmation of where work will land.
+    """
+    session = getattr(getattr(model, "model", None), "model", None)
+    get_providers = getattr(session, "get_providers", None)
+    return list(get_providers()) if get_providers else []
+
+
+def _providers_for(device: str) -> list[str]:
+    """Translate a device choice into an ONNX Runtime provider list.
+
+    Always explicit, never left to the default. Where onnxruntime-gpu is
+    installed, ORT's default list already leads with CUDA, so omitting providers
+    would quietly place work on the GPU even when CPU was asked for.
+    """
+    if device not in config.EMBED_DEVICES:
+        raise ValueError(
+            f"Unknown device {device!r}; expected one of {', '.join(config.EMBED_DEVICES)}"
+        )
+    if device == "cpu":
+        return [CPU_PROVIDER]
+
+    available, reason = cuda_available()
+    if available:
+        # CPU stays in the list as ORT's per-node fallback for any operator the
+        # CUDA provider does not implement.
+        return [CUDA_PROVIDER, CPU_PROVIDER]
+    if device == "cuda":
+        raise RuntimeError(f"device='cuda' was requested but CUDA is unavailable: {reason}")
+    return [CPU_PROVIDER]
+
 
 class VectorCache:
     """Content-hash keyed vector cache backed by a single .npz file."""
@@ -61,20 +129,38 @@ class Embedder:
         model_name: str = config.EMBED_MODEL_NAME,
         *,
         use_cache: bool = True,
+        device: str = config.EMBED_DEVICE,
     ) -> None:
         self.model_name = model_name
+        self.device = device
         self._model = None
         self.cache = VectorCache() if use_cache else None
         self.cache_hits = 0
         self.cache_misses = 0
+        self.providers: list[str] = []
 
     @property
     def model(self):
         if self._model is None:
             from fastembed import TextEmbedding
 
-            self._model = TextEmbedding(model_name=self.model_name)
+            self._model = TextEmbedding(
+                model_name=self.model_name,
+                providers=_providers_for(self.device),
+            )
+            self.providers = session_providers(self._model)
+            if self.device == "cuda" and not self.on_gpu:
+                raise RuntimeError(
+                    "device='cuda' was requested but the session initialised on "
+                    f"{self.providers or ['an unreported provider']}. Refusing to start "
+                    "a long run on a device it was not asked for."
+                )
         return self._model
+
+    @property
+    def on_gpu(self) -> bool:
+        """True only once a session exists and reports the CUDA provider."""
+        return CUDA_PROVIDER in self.providers
 
     def _embed_raw(self, texts: list[str], batch_size: int) -> list[np.ndarray]:
         return [

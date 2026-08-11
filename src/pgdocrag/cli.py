@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from enum import Enum
+from typing import Optional
 
 import typer
 
@@ -32,6 +33,17 @@ class Scope(str, Enum):
     full = "full"
 
 
+class Corpus(str, Enum):
+    slice = "slice"
+    full = "full"
+
+
+class Device(str, Enum):
+    auto = "auto"
+    cuda = "cuda"
+    cpu = "cpu"
+
+
 def _configure_stdout() -> None:
     """The docs contain em dashes; the Windows console codepage cannot encode them."""
     for stream in (sys.stdout, sys.stderr):
@@ -44,18 +56,28 @@ def _wants(source: Source, target: str) -> bool:
 
 
 @app.callback()
-def main() -> None:
+def main(
+    corpus: Corpus = typer.Option(
+        Corpus(config.DEFAULT_CORPUS),
+        help="Namespace for derived artifacts: the published benchmark slice, or the full manual.",
+    ),
+) -> None:
     _configure_stdout()
+    config.use_corpus(corpus.value)
     config.ensure_dirs()
 
 
 @app.command()
 def collect(
     source: Source = typer.Option(Source.all, help="Which source format to collect."),
-    scope: Scope = typer.Option(Scope.slice, help="Development slice or the full manual."),
+    scope: Optional[Scope] = typer.Option(
+        None, help="Crawl breadth. Defaults to matching the selected corpus."
+    ),
     refresh: bool = typer.Option(False, help="Re-download even if cached."),
 ) -> None:
     """Stage 1: fetch raw documentation to data/raw/."""
+    scope = scope or Scope(config.CORPUS)
+
     if _wants(source, "html"):
         from .collect import html_crawler
 
@@ -110,6 +132,10 @@ def chunk(
 def embed(
     source: Source = typer.Option(Source.all, help="Which source format to embed."),
     reset: bool = typer.Option(False, help="Drop the collection before writing."),
+    device: Device = typer.Option(
+        Device(config.DEFAULT_EMBED_DEVICE),
+        help="Execution provider: auto prefers the GPU, cuda refuses to fall back to CPU.",
+    ),
 ) -> None:
     """Stages 4 and 5: embed chunks and store them in Chroma."""
     from .embed import pipeline
@@ -117,7 +143,38 @@ def embed(
     for target in ("html", "pdf"):
         if _wants(source, target):
             typer.secho(f"Embedding and storing {target} chunks", fg=typer.colors.CYAN)
-            pipeline.embed_and_store(target, reset=reset)
+            try:
+                pipeline.embed_and_store(target, reset=reset, device=device.value)
+            except RuntimeError as error:
+                # Chiefly an unusable GPU or missing chunks: both are the user's
+                # to fix, so a traceback would only bury the message.
+                typer.secho(str(error), fg=typer.colors.RED)
+                raise typer.Exit(code=1) from error
+
+
+@app.command()
+def device() -> None:
+    """Report which execution provider embedding would use, without embedding."""
+    from .embed.embedder import CUDA_PROVIDER, Embedder, cuda_available
+
+    available, reason = cuda_available()
+    typer.secho(f"CUDA available    {available}  ({reason})", fg=typer.colors.CYAN)
+
+    import onnxruntime as ort
+
+    typer.echo(f"onnxruntime       {ort.__version__}")
+    typer.echo(f"providers built   {', '.join(ort.get_available_providers())}")
+
+    # Loading the real model is the point: a provider that registers can still
+    # fail to initialise, and only a live session settles the question.
+    probe = Embedder(use_cache=False, device=config.DEFAULT_EMBED_DEVICE)
+    probe.model
+    typer.echo(f"session providers {', '.join(probe.providers) or 'none reported'}")
+    colour = typer.colors.GREEN if probe.on_gpu else typer.colors.YELLOW
+    typer.secho(
+        f"embedding would run on {'GPU via ' + CUDA_PROVIDER if probe.on_gpu else 'CPU'}",
+        fg=colour,
+    )
 
 
 @app.command()

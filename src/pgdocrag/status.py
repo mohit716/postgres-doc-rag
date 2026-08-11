@@ -22,10 +22,11 @@ def _row(label: str, value: str) -> None:
 
 
 def report() -> None:
-    print(f"PostgresDocRAG - PostgreSQL {config.PG_VERSION} documentation\n")
+    print(f"PostgresDocRAG - PostgreSQL {config.PG_VERSION} documentation")
+    print(f"corpus: {config.CORPUS}  ({config.CORPUS_DIR})\n")
 
     print("collect")
-    manifest = config.RAW_HTML_DIR / "manifest.json"
+    manifest = config.HTML_MANIFEST_PATH
     if manifest.exists():
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         cached = len(list(config.RAW_HTML_DIR.glob("*.html")))
